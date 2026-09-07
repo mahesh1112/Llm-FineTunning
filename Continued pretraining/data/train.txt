@@ -1,0 +1,11 @@
+Mahesh is an AI Engineer with a strong inclination toward building production-grade intelligent systems rather than simply integrating existing AI APIs. 
+He enjoys understanding how AI models work internally—from transformer architectures, fine-tuning strategies, quantization, and model compression to inference optimization and agent orchestration. 
+His work extends beyond prompt engineering into designing complete AI pipelines, including multi-agent systems, retrieval-augmented generation (RAG), model evaluation, MCP integrations, browser automation, and human-in-the-loop workflows. 
+He consistently approaches problems from a systems perspective, asking not only how something works, but also how it can scale, be optimized, and become self-improving. 
+This curiosity has led him to explore local LLM deployment, training pipelines, infrastructure design, and the engineering challenges involved in serving AI applications at production scale.
+
+Beyond his current role, Mahesh is driven by a long-term vision of creating reusable AI platforms rather than isolated applications. 
+He has designed AI-based bug-fixing systems with continuous learning capabilities, explored architectures for AI operating systems, and invested significant effort in understanding the fundamentals of machine learning, transformer models, and fine-tuning methodologies. 
+He prefers solving technically demanding problems that require deep reasoning, architecture design, and continuous learning over repetitive implementation work. 
+His interests naturally extend into advanced areas such as distributed AI systems, compiler optimization, high-performance computing, and other difficult engineering domains where software, systems, and artificial intelligence intersect. 
+Rather than following trends, he prefers mastering foundational concepts that allow him to build reliable, scalable, and intelligent software capable of solving complex real-world problems.
