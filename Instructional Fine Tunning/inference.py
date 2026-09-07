@@ -13,7 +13,8 @@ model = PeftModel.from_pretrained(
     "outputs/final"
 )
 
-prompt = "Instruction: What is AI?\nInput:\nAnswer:"
+# prompt = "What is Machine Learning?"
+prompt = "What is Delhi"
 
 inputs = tokenizer(
     prompt,
