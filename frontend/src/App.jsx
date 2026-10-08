@@ -10,6 +10,7 @@ import {
   HardDrive,
   LayoutDashboard,
   Menu,
+  Network,
   Plus,
   X,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ const navigation = [
   { id: 'datasets', label: 'Datasets', icon: Database },
   { id: 'runs', label: 'Training runs', icon: Activity },
   { id: 'evaluation', label: 'Evaluation', icon: FlaskConical },
+  { id: 'api-test', label: 'API test', icon: Network },
   { id: 'models', label: 'Model catalog', icon: Cpu },
 ]
 
@@ -31,6 +33,7 @@ const pageDetails = {
   datasets: ['Datasets', 'Review imported data and validation status.'],
   runs: ['Training runs', 'Monitor recent experiments and their outcomes.'],
   evaluation: ['Evaluation', 'Run a trained model against a held-out dataset.'],
+  'api-test': ['API test', 'Call the Python health function and inspect its response.'],
   models: ['Model catalog', 'Browse models available in this preview.'],
 }
 
@@ -438,6 +441,40 @@ function EvaluationPage({ workspace }) {
   )
 }
 
+function ApiTestPage() {
+  const [loading, setLoading] = useState(false)
+  const [output, setOutput] = useState(null)
+
+  async function callHealthFunction() {
+    setLoading(true)
+    try {
+      if (api.isPreviewMode) {
+        throw new Error('VITE_API_BASE_URL is not configured. Set it and restart the frontend dev server.')
+      }
+      setOutput(await api.checkHealth())
+    } catch (error) {
+      setOutput({ error: error.message || 'The health request failed.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <PageHeading title="API test" description="Call the Python health function and inspect its response." />
+      <section className="content-panel api-test-panel">
+        <div className="api-test-toolbar">
+          <div><span className="section-index">GET /api/health</span><p>Target: {api.isPreviewMode ? 'API URL not configured' : 'Configured Python API'}</p></div>
+          <button type="button" className="button button-primary" onClick={callHealthFunction} disabled={loading}>
+            <Network size={16} /> {loading ? 'Calling…' : 'Call health function'}
+          </button>
+        </div>
+        <pre className={`api-output ${output?.error ? 'api-output-error' : ''}`} aria-live="polite">{output ? JSON.stringify(output, null, 2) : 'No response yet.'}</pre>
+      </section>
+    </>
+  )
+}
+
 function App() {
   const [activePage, setActivePage] = useState('overview')
   const [workspace, setWorkspace] = useState(null)
@@ -504,6 +541,7 @@ function App() {
           {loadError && <div className="error-banner" role="alert">Workspace preview could not be loaded. Refresh the page to try again.</div>}
           {!workspace && !loadError ? <div className="loading-state"><span className="loading-mark"><Cpu size={23} /></span><p>Preparing your workspace</p></div> : workspace && activePage === 'overview' ? <><PageHeading title={title} description={description} onCreate={() => setDialogOpen(true)} /><Overview workspace={workspace} /></> : workspace && activePage === 'projects' ? <ProjectList projects={workspace.projects} onCreate={() => setDialogOpen(true)} /> : workspace && activePage === 'datasets' ? <><PageHeading title={title} description={description} /><section className="content-panel list-panel"><div className="section-heading"><div><span className="section-index">DATASETS</span><h2>Dataset library</h2></div></div><DataTable rows={workspace.datasets} emptyLabel="No datasets available." columns={[{ key: 'name', label: 'DATASET', render: (row) => <div className="run-name"><span className="file-icon"><Database size={16} /></span><span><strong>{row.name}</strong><small>{row.detail}</small></span></div> }, { key: 'format', label: 'FORMAT' }, { key: 'rows', label: 'ROWS' }, { key: 'status', label: 'VALIDATION', render: (row) => <Status tone={row.status === 'Validated' ? 'success' : 'warning'}>{row.status}</Status> }]}/></section></> : workspace && activePage === 'runs' ? <><PageHeading title={title} description={description} /><section className="content-panel list-panel"><div className="section-heading"><div><span className="section-index">RUN HISTORY</span><h2>Training runs</h2></div></div><DataTable rows={workspace.runs} emptyLabel="No training runs yet." columns={[{ key: 'name', label: 'RUN', render: (row) => <div className="run-name"><span className="run-marker" /><span><strong>{row.name}</strong><small>{row.project}</small></span></div> }, { key: 'model', label: 'BASE MODEL' }, { key: 'method', label: 'METHOD' }, { key: 'updated', label: 'UPDATED' }, { key: 'status', label: 'STATUS', render: (row) => <Status tone={row.tone}>{row.status}</Status> }]}/></section></> : workspace && activePage === 'models' ? <><PageHeading title={title} description={description} /><div className="model-grid">{workspace.models.map((model) => <article className="model-card" key={model.id}><div className="model-card-top"><span className="model-symbol"><Cpu size={19} /></span><Status tone={model.tone}>{model.capability}</Status></div><span className="section-index">{model.family}</span><h2>{model.name}</h2><p>{model.description}</p><div className="model-specs"><span><small>PARAMETERS</small><strong>{model.parameters}</strong></span><span><small>CONTEXT</small><strong>{model.context}</strong></span><span><small>DOWNLOAD</small><strong>{model.download}</strong></span></div><div className="model-card-foot"><span>{model.methods}</span></div></article>)}</div></> : null}
           {workspace && activePage === 'evaluation' && <EvaluationPage workspace={workspace} />}
+          {workspace && activePage === 'api-test' && <ApiTestPage />}
         </div>
       </main>
       {dialogOpen && <ProjectDialog onClose={() => setDialogOpen(false)} onCreate={createProject} />}
