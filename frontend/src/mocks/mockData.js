@@ -5,15 +5,16 @@ export const initialWorkspace = {
     { id: 'project-classifier', name: 'Ticket triage', description: 'Consistent intent and priority classification.', model: 'Qwen2.5 0.5B', runCount: 1, lastRunStatus: 'Draft', updatedLabel: 'Updated Oct 4' },
   ],
   runs: [
-    { id: 'run-104', name: 'Support tone v3', project: 'Support copilot', model: 'Qwen2.5 1.5B', method: 'LoRA SFT', status: 'Passed', tone: 'success', updated: 'Today, 10:42' },
+    { id: 'run-104', name: 'Support tone v3', project: 'Support copilot', projectId: 'project-support', datasetId: 'dataset-support', model: 'Qwen2.5 1.5B', method: 'LoRA SFT', status: 'Passed', tone: 'success', updated: 'Today, 10:42' },
     { id: 'run-103', name: 'Docs retrieval baseline', project: 'Documentation Q&A', model: 'Llama 3.2 3B', method: 'LoRA SFT', status: 'Evaluating', tone: 'running', updated: 'Today, 09:16' },
-    { id: 'run-102', name: 'Intent labels v1', project: 'Ticket triage', model: 'Qwen2.5 0.5B', method: 'LoRA SFT', status: 'Warning', tone: 'warning', updated: 'Yesterday' },
+    { id: 'run-102', name: 'Intent labels v1', project: 'Ticket triage', projectId: 'project-classifier', datasetId: 'dataset-intent', model: 'Qwen2.5 0.5B', method: 'LoRA SFT', status: 'Warning', tone: 'warning', updated: 'Yesterday' },
     { id: 'run-101', name: 'Support tone v2', project: 'Support copilot', model: 'Qwen2.5 1.5B', method: 'LoRA SFT', status: 'Failed', tone: 'danger', updated: 'Oct 5' },
   ],
   datasets: [
     { id: 'dataset-support', name: 'support_conversations_v3.jsonl', detail: '4.8 MB · Fingerprint 7c91…e2a4', format: 'JSONL', rows: '2,480', status: 'Validated' },
     { id: 'dataset-docs', name: 'product_guides.txt', detail: '1.2 MB · Fingerprint 3fa1…cb08', format: 'Plain text', rows: '—', status: 'Validated' },
     { id: 'dataset-intent', name: 'ticket_intents.jsonl', detail: '860 KB · 3 validation notes', format: 'JSONL', rows: '1,120', status: 'Warnings' },
+    { id: 'dataset-support-eval', name: 'support_heldout_v1.jsonl', detail: '640 KB · Held-out evaluation split', format: 'JSONL', rows: '256', status: 'Validated', role: 'evaluation', projectId: 'project-support' },
   ],
   machine: { gpu: 'NVIDIA GeForce RTX 4060', runtime: 'CUDA 12.4 · PyTorch 2.6', vram: '6.2 / 8 GB', vramUsage: '68%', storage: '184 GB', storageUsage: '72%' },
   lastEvaluation: '82.4%',

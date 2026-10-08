@@ -70,6 +70,43 @@ export const api = {
     })
   },
 
+  async startEvaluation({ runId, datasetId }) {
+    if (API_BASE_URL) {
+      return request('/evaluations', { method: 'POST', body: { runId, datasetId } })
+    }
+
+    const run = workspace.runs.find((item) => item.id === runId)
+    const dataset = workspace.datasets.find((item) => item.id === datasetId)
+    if (!run || !dataset) throw new Error('Select an available trained run and evaluation dataset.')
+    if (run.datasetId === datasetId) throw new Error('Choose a held-out dataset that was not used for training.')
+
+    const evaluation = {
+      id: `evaluation-${crypto.randomUUID()}`,
+      status: 'completed',
+      runId,
+      datasetId,
+      modelName: run.model,
+      datasetName: dataset.name,
+      samplesEvaluated: Number(dataset.rows?.replaceAll(',', '')) || 256,
+      completedAt: new Date().toISOString(),
+      metrics: [
+        { name: 'Exact match', value: 0.824, formatted: '82.4%', direction: 'higher' },
+        { name: 'Token F1', value: 0.891, formatted: '89.1%', direction: 'higher' },
+        { name: 'Validation loss', value: 0.638, formatted: '0.638', direction: 'lower' },
+      ],
+      previewOnly: true,
+    }
+    workspace.evaluations = [evaluation, ...(workspace.evaluations || [])]
+    await delay(null)
+    return evaluation
+  },
+
+  getEvaluation(evaluationId) {
+    if (API_BASE_URL) return request(`/evaluations/${encodeURIComponent(evaluationId)}`)
+    const evaluation = workspace.evaluations?.find((item) => item.id === evaluationId)
+    return evaluation ? delay(evaluation) : Promise.reject(new Error('Evaluation result was not found.'))
+  },
+
   async uploadDataset(file, workflow) {
     if (API_BASE_URL) {
       const body = new FormData()

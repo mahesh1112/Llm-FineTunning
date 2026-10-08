@@ -23,8 +23,12 @@ Set `VITE_API_BASE_URL` to the API origin, without a trailing slash or `/api` su
 | `POST` | `/api/estimates` | Estimate a workflow from model, technique, dataset size, and hardware profile |
 | `POST` | `/api/datasets/import` | Multipart form fields `file` and `workflow`; return `{ "id": "...", "name": "...", "sizeBytes": 123 }` |
 | `POST` | `/api/projects` | Create the configured project and job request |
+| `POST` | `/api/evaluations` | Start evaluation with `{ "runId": "...", "datasetId": "..." }`; return an evaluation job ID and status |
+| `GET` | `/api/evaluations/{id}` | Poll job status and return metrics when evaluation completes |
 
 Estimate requests contain `workflow`, `modelId`, `technique`, `datasetSizeBytes`, and `hardwareProfile`. Return `minSeconds`, `maxSeconds`, `confidence`, and optional `assumptions`. Model results may include `nextCursor` for pagination.
+
+Mark held-out datasets in `/api/workspace` with `role: "evaluation"` or `split: "validation" | "test"`. Evaluation results should include `status`, `modelName`, `datasetName`, `samplesEvaluated`, and a `metrics` array. Each metric may provide `name`, numeric `value`, display-ready `formatted`, and `direction` (`higher` or `lower`). Failed jobs should include a readable `message`.
 
 The browser sends cross-origin requests, so configure the API's CORS allowlist for the exact GitHub Pages origin. Keep Hugging Face credentials and all other secrets on the Python service; `VITE_*` values are embedded in public JavaScript and are not secret.
 
