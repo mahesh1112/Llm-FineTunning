@@ -17,6 +17,7 @@ Set `VITE_API_BASE_URL` to the API origin, without a trailing slash or `/api` su
 
 | Method | Route | Purpose |
 |---|---|---|
+| `GET` | `/api/health` | Check that the Python service is reachable |
 | `GET` | `/api/workspace` | Dashboard projects, runs, datasets, model summaries, and evaluation summary |
 | `GET` | `/api/models?query=&limit=20&cursor=` | Search the Hugging Face-backed model catalog; return `{ "items": [{ "id": "org/model", "name": "org/model", "parameters": "7B" }], "nextCursor": null }` |
 | `GET` | `/api/hardware-profile` | Hardware profile for the machine that will execute the job |
@@ -49,6 +50,8 @@ Publish the generated `dist/` directory using a GitHub Pages Actions workflow. T
 - Fine-tuning is a long-running, resource-intensive job. The Python function should validate and enqueue a job for a persistent worker, then return a job identifier; do not run GPU training inside a short-lived serverless request.
 - Serverless providers commonly limit request size, duration, and temporary disk. For large datasets, use an authenticated upload handshake and direct-to-object-storage upload instead of forwarding the file through the function. The current UI uses a multipart import endpoint.
 - GitHub Pages has no private runtime configuration. Do not put API keys, Hugging Face tokens, or credentials in frontend environment variables.
+
+For the first health-function implementation and local connection commands, see [Backend/README.md](../Backend/README.md). When only `/api/health` is implemented, the dashboard falls back to sample workspace data while showing the live API health status.
 
 ## Preview scope
 

@@ -327,7 +327,7 @@ function Overview({ workspace }) {
           <div className="machine-name"><span className="machine-icon"><Cpu size={18} /></span><span><strong>{machine.gpu}</strong><small>{machine.runtime}</small></span></div>
           <div className="resource-line"><div><span><Cpu size={14} /> VRAM</span><strong>{machine.vram}</strong></div><div className="meter"><i style={{ width: machine.vramUsage }} /></div></div>
           <div className="resource-line"><div><span><HardDrive size={14} /> Storage free</span><strong>{machine.storage}</strong></div><div className="meter meter-green"><i style={{ width: machine.storageUsage }} /></div></div>
-          <p className="machine-foot">{api.isPreviewMode ? 'Sample hardware profile' : 'Reported by Python API'}</p>
+          <p className="machine-foot">{api.isPreviewMode || workspace.previewOnly ? 'Sample hardware profile' : 'Reported by Python API'}</p>
         </section>
         <section className="dataset-panel">
           <div className="section-heading compact"><div><span className="section-index">DATASETS</span><h2>Latest dataset</h2></div></div>
@@ -444,6 +444,18 @@ function App() {
   const [loadError, setLoadError] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [backendStatus, setBackendStatus] = useState(api.isPreviewMode ? 'preview' : 'checking')
+
+  useEffect(() => {
+    if (api.isPreviewMode) return undefined
+    let current = true
+    api.checkHealth().then((result) => {
+      if (current) setBackendStatus(result.status === 'ok' ? 'connected' : 'offline')
+    }).catch(() => {
+      if (current) setBackendStatus('offline')
+    })
+    return () => { current = false }
+  }, [])
 
   useEffect(() => {
     let current = true
@@ -483,11 +495,11 @@ function App() {
         <a className="brand" href="#overview" onClick={(event) => { event.preventDefault(); setActivePage('overview') }}><span className="brand-mark"><Cpu size={18} /></span><span>Local<span className="brand-light">Foundry</span><small>MODEL WORKSPACE</small></span></a>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Main navigation">{navigation.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${activePage === id ? 'nav-active' : ''}`} onClick={() => { setActivePage(id); setMobileMenuOpen(false) }}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{id === 'runs' && workspace?.runs.some((run) => run.status === 'Training') && <i className="nav-notice" />}</button>)}</nav>
-        <div className="sidebar-bottom"><div className="sidebar-mode"><i />{api.isPreviewMode ? 'Preview data' : 'Python API connected'}</div></div>
+        <div className="sidebar-bottom"><div className={`sidebar-mode connection-${backendStatus}`}><i />{backendStatus === 'preview' ? 'Preview data' : backendStatus === 'checking' ? 'Checking Python API' : backendStatus === 'connected' ? 'Python API connected' : 'Python API unreachable'}</div></div>
       </aside>
       {mobileMenuOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)} />}
       <main className="main-area">
-        <header className="topbar"><button className="menu-toggle icon-button" aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)}><Menu size={19} /></button><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{title}</strong></div><span className="connection-label"><i />{api.isPreviewMode ? 'Preview data' : 'Python API'}</span></header>
+        <header className="topbar"><button className="menu-toggle icon-button" aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)}><Menu size={19} /></button><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{title}</strong></div><span className={`connection-label connection-${backendStatus}`}><i />{backendStatus === 'preview' ? 'Preview data' : backendStatus === 'checking' ? 'Checking API' : backendStatus === 'connected' ? 'API connected' : 'API unreachable'}</span></header>
         <div className="page-content">
           {loadError && <div className="error-banner" role="alert">Workspace preview could not be loaded. Refresh the page to try again.</div>}
           {!workspace && !loadError ? <div className="loading-state"><span className="loading-mark"><Cpu size={23} /></span><p>Preparing your workspace</p></div> : workspace && activePage === 'overview' ? <><PageHeading title={title} description={description} onCreate={() => setDialogOpen(true)} /><Overview workspace={workspace} /></> : workspace && activePage === 'projects' ? <ProjectList projects={workspace.projects} onCreate={() => setDialogOpen(true)} /> : workspace && activePage === 'datasets' ? <><PageHeading title={title} description={description} /><section className="content-panel list-panel"><div className="section-heading"><div><span className="section-index">DATASETS</span><h2>Dataset library</h2></div></div><DataTable rows={workspace.datasets} emptyLabel="No datasets available." columns={[{ key: 'name', label: 'DATASET', render: (row) => <div className="run-name"><span className="file-icon"><Database size={16} /></span><span><strong>{row.name}</strong><small>{row.detail}</small></span></div> }, { key: 'format', label: 'FORMAT' }, { key: 'rows', label: 'ROWS' }, { key: 'status', label: 'VALIDATION', render: (row) => <Status tone={row.status === 'Validated' ? 'success' : 'warning'}>{row.status}</Status> }]}/></section></> : workspace && activePage === 'runs' ? <><PageHeading title={title} description={description} /><section className="content-panel list-panel"><div className="section-heading"><div><span className="section-index">RUN HISTORY</span><h2>Training runs</h2></div></div><DataTable rows={workspace.runs} emptyLabel="No training runs yet." columns={[{ key: 'name', label: 'RUN', render: (row) => <div className="run-name"><span className="run-marker" /><span><strong>{row.name}</strong><small>{row.project}</small></span></div> }, { key: 'model', label: 'BASE MODEL' }, { key: 'method', label: 'METHOD' }, { key: 'updated', label: 'UPDATED' }, { key: 'status', label: 'STATUS', render: (row) => <Status tone={row.tone}>{row.status}</Status> }]}/></section></> : workspace && activePage === 'models' ? <><PageHeading title={title} description={description} /><div className="model-grid">{workspace.models.map((model) => <article className="model-card" key={model.id}><div className="model-card-top"><span className="model-symbol"><Cpu size={19} /></span><Status tone={model.tone}>{model.capability}</Status></div><span className="section-index">{model.family}</span><h2>{model.name}</h2><p>{model.description}</p><div className="model-specs"><span><small>PARAMETERS</small><strong>{model.parameters}</strong></span><span><small>CONTEXT</small><strong>{model.context}</strong></span><span><small>DOWNLOAD</small><strong>{model.download}</strong></span></div><div className="model-card-foot"><span>{model.methods}</span></div></article>)}</div></> : null}

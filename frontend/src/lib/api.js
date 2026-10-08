@@ -17,7 +17,9 @@ async function request(path, { body, ...options } = {}) {
   const response = await fetch(`${API_BASE_URL}/api${path}`, requestOptions)
   const data = response.status === 204 ? null : await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error(data?.detail || data?.message || `API request failed (${response.status}).`)
+    const error = new Error(data?.detail || data?.message || `API request failed (${response.status}).`)
+    error.status = response.status
+    throw error
   }
   return data
 }
@@ -29,8 +31,17 @@ function delay(value) {
 export const api = {
   isPreviewMode: !API_BASE_URL,
 
+  checkHealth() {
+    if (!API_BASE_URL) return Promise.resolve({ status: 'preview' })
+    return request('/health')
+  },
+
   getWorkspace() {
-    return API_BASE_URL ? request('/workspace') : delay(structuredClone(workspace))
+    if (!API_BASE_URL) return delay(structuredClone(workspace))
+    return request('/workspace').catch((error) => {
+      if (error.status !== 404) throw error
+      return delay({ ...structuredClone(workspace), previewOnly: true })
+    })
   },
 
   listModels({ query = '', cursor = '' } = {}) {
