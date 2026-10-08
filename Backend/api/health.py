@@ -1,36 +1,39 @@
 import json
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections.abc import Callable
+from typing import Any
+
+from services.health import get_health
+
+StartResponse = Callable[[str, list[tuple[str, str]]], Any]
 
 
-class handler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self._send_cors_headers()
-        self.end_headers()
+def application(environ: dict[str, Any], start_response: StartResponse) -> list[bytes]:
+    """WSGI entry point for on-demand HTTP adapters."""
+    method = environ.get("REQUEST_METHOD", "GET").upper()
+    path = environ.get("PATH_INFO", "")
+    cors_headers = [
+        ("Access-Control-Allow-Origin", "*"),
+        ("Access-Control-Allow-Methods", "GET, OPTIONS"),
+        ("Access-Control-Allow-Headers", "Content-Type"),
+    ]
 
-    def do_GET(self):
-        if self.path.partition("?")[0] not in ("/api/health", "/health"):
-            self.send_response(404)
-            self._send_cors_headers()
-            self.end_headers()
-            return
+    if path not in ("/api/health", "/health"):
+        status = "404 Not Found"
+        payload = json.dumps({"detail": "Not found."}).encode("utf-8")
+    elif method == "OPTIONS":
+        start_response("204 No Content", cors_headers)
+        return [b""]
+    elif method != "GET":
+        status = "405 Method Not Allowed"
+        payload = json.dumps({"detail": "Method not allowed."}).encode("utf-8")
+    else:
+        status = "200 OK"
+        payload = json.dumps(get_health()).encode("utf-8")
 
-        payload = json.dumps({"status": "ok", "service": "local-foundry-api"}).encode()
-        self.send_response(200)
-        self._send_cors_headers()
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(payload)
-
-    def _send_cors_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-
-
-if __name__ == "__main__":
-    server = ThreadingHTTPServer(("127.0.0.1", 8000), handler)
-    print("Health API listening at http://127.0.0.1:8000/api/health")
-    server.serve_forever()
+    headers = cors_headers + [
+        ("Content-Type", "application/json; charset=utf-8"),
+        ("Content-Length", str(len(payload))),
+        ("Cache-Control", "no-store"),
+    ]
+    start_response(status, headers)
+    return [payload]

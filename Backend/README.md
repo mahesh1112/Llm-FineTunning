@@ -1,34 +1,25 @@
-# Local Foundry Python function
+# Python API
 
-This folder contains the first serverless endpoint: `GET /api/health`. It uses Python's standard library and has no package dependencies.
+This backend currently exposes one endpoint: `GET /api/health`. The API is a provider-neutral WSGI callable, and the response logic is isolated in `services/health.py`. It does not start a web server or keep a process running.
 
-## Test locally
+## Verify the function without a server
 
-From the workspace root, start the function:
-
-```powershell
-python Backend/api/health.py
-```
-
-In another terminal, verify the JSON response:
+From the `Backend/` directory:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/health
+python -m unittest discover -s tests -v
 ```
 
-Expected response: `status: ok`, `service: local-foundry-api`.
+The tests call the WSGI function in-process. They cover the health response, browser CORS preflight, unsupported methods, and unimplemented routes.
 
-To connect the Vite frontend locally, run these commands from `frontend/` in a separate terminal:
+## HTTP and serverless integration
 
-```powershell
-$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
-npm run dev -- --host 127.0.0.1 --port 5174
-```
+The WSGI callable is `api.health.application`. A future hosting adapter should map HTTP requests to this callable and invoke it per request. Choose and add a provider adapter only after selecting a deployment platform. No cloud SDK, web framework, server, or provider configuration is required by the API/service code today.
 
-The top bar should change to **API connected**. The workspace stays on preview data until its API routes are implemented.
+For local manual HTTP testing only, an optional WSGI development server may be used. It is not required for function tests and is not the intended production runtime.
 
-## Deploy to Vercel
+The React frontend already requests `GET /api/health` from the configured `VITE_API_BASE_URL`; no frontend URL or framework change is needed. Other routes listed in the frontend contract are not implemented yet and return 404.
 
-Create a Vercel project for this repository and set its **Root Directory** to `Backend`. Vercel maps `api/health.py` to `/api/health`. Deploy the project, then set the frontend build variable `VITE_API_BASE_URL` to the deployed origin (for example, `https://your-project.vercel.app`) and rebuild the GitHub Pages site.
+## Current execution limits
 
-This endpoint only returns non-sensitive health information and allows cross-origin GET/OPTIONS requests. Before adding private data or state-changing routes, replace the wildcard origin with the exact frontend origin and add appropriate authentication.
+This endpoint is stateless and short-lived. Existing training scripts are not connected to it. Model training is long-running and writes checkpoints/artifacts, so a serverless request should not run training inline. That feature will need a durable job/worker and persistent artifact storage, designed separately from this health endpoint.
