@@ -1,24 +1,40 @@
 # Python API
 
-This backend currently exposes one endpoint: `GET /api/health`. The API is a provider-neutral WSGI callable, and the response logic is isolated in `services/health.py`. It does not start a web server or keep a process running.
+This backend currently exposes one endpoint: `GET /api/health`. The response logic is isolated in `services/health.py`. `api/health.py` keeps a provider-neutral WSGI callable; `app.py` is a small ASGI adapter for local Uvicorn development.
 
-## Verify the function without a server
+## Planned function templates
 
-From the `Backend/` directory:
+`api/operations.py` contains unrouted HTTP function stubs for workspace data, model search, hardware profile, run estimates, dataset import, project creation, and evaluation start/status. Each is intended to validate/request HTTP data and delegate to its service counterpart.
+
+`services/operations.py` contains the matching business-service stubs for assembling workspace data, searching the model catalog, hardware discovery, resource estimation, dataset validation/storage, project persistence, and evaluation jobs/results.
+
+These functions contain descriptions and placeholders only. They are not connected to `app.py`, do not execute work, and do not create live API routes. The health endpoint remains the only implemented route.
+
+## Run locally with Uvicorn
+
+From the workspace root, install the local HTTP adapter dependencies:
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m pip install -r Backend/requirements.txt
 ```
 
-The tests call the WSGI function in-process. They cover the health response, browser CORS preflight, unsupported methods, and unimplemented routes.
+After installing dependencies, start the backend from the workspace root:
 
-## HTTP and serverless integration
+```powershell
+uvicorn app:app --app-dir Backend --reload --host 127.0.0.1 --port 8000
+```
 
-The WSGI callable is `api.health.application`. A future hosting adapter should map HTTP requests to this callable and invoke it per request. Choose and add a provider adapter only after selecting a deployment platform. No cloud SDK, web framework, server, or provider configuration is required by the API/service code today.
+Verify in a browser or another terminal at `http://127.0.0.1:8000/api/health`. Expected JSON: `{"status":"ok","service":"local-foundry-api"}`.
 
-For local manual HTTP testing only, an optional WSGI development server may be used. It is not required for function tests and is not the intended production runtime.
+The frontend uses the hardcoded local API origin `http://127.0.0.1:8000`. Start it separately from the workspace root with `npm --prefix frontend run dev`. The UI health request should show **API connected**. The workspace and other routes are not implemented and remain preview/unavailable as appropriate.
 
-The React frontend already requests `GET /api/health` from the configured `VITE_API_BASE_URL`; no frontend URL or framework change is needed. Other routes listed in the frontend contract are not implemented yet and return 404.
+The WSGI callable can still be invoked by a future hosting adapter. No cloud provider or deployment configuration is selected here. The Vite and Uvicorn commands are local development servers and must remain running while testing locally.
+
+Run the provider-neutral WSGI function tests from this `Backend/` directory:
+
+```powershell
+python -B -m unittest discover -s tests -v
+```
 
 ## Current execution limits
 
