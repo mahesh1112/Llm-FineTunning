@@ -1,7 +1,7 @@
 import { initialWorkspace } from '../mocks/mockData'
 
 let workspace = structuredClone(initialWorkspace)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '')
+const API_BASE_URL = 'http://127.0.0.1:8000'
 
 async function request(path, { body, ...options } = {}) {
   const headers = new Headers(options.headers)
@@ -29,7 +29,7 @@ function delay(value) {
 }
 
 export const api = {
-  isPreviewMode: !API_BASE_URL,
+  isPreviewMode: false,
 
   checkHealth() {
     if (!API_BASE_URL) return Promise.resolve({ status: 'preview' })
