@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.operations import get_hardware_profile
+from api.operations import get_hardware_profile, get_workspace
 from services.health import get_health
 
 app = FastAPI(title="Local Foundry API", docs_url=None, redoc_url=None)
@@ -26,3 +26,8 @@ def health() -> dict[str, str]:
 @app.get("/api/hardware-profile")
 def hardware_profile() -> dict:
     return get_hardware_profile()
+
+
+@app.get("/api/workspace")
+def workspace() -> dict:
+    return get_workspace()

@@ -6,12 +6,15 @@ Implemented endpoints delegate to their matching service functions.
 
 from typing import Any
 
-from services.operations import collect_hardware_profile as collect_hardware_profile_service
+from services.operations import (
+    collect_hardware_profile as collect_hardware_profile_service,
+    load_workspace as load_workspace_service,
+)
 
 
 def get_workspace() -> dict[str, Any]:
     """Return project, run, dataset, model, hardware, and evaluation summaries."""
-    ...
+    return load_workspace_service()
 
 
 def search_models(query: str = "", cursor: str | None = None) -> dict[str, Any]:

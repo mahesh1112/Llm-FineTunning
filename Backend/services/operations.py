@@ -1,17 +1,106 @@
 """Business services and templates used by the API endpoint implementations."""
 
+import json
 import platform
 import shutil
+import sqlite3
 from datetime import datetime, timezone
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import psutil
+from services.storage import connect
 
 
 def load_workspace() -> dict[str, Any]:
     """Assemble the local workspace summary from project, run, and dataset records."""
-    ...
+    with connect() as connection:
+        project_rows = connection.execute(
+            "SELECT * FROM projects ORDER BY updated_at DESC"
+        ).fetchall()
+        run_rows = connection.execute(
+            "SELECT runs.*, projects.name AS project_name "
+            "FROM runs LEFT JOIN projects ON projects.id = runs.project_id "
+            "ORDER BY runs.updated_at DESC"
+        ).fetchall()
+        dataset_rows = connection.execute(
+            "SELECT * FROM datasets ORDER BY created_at DESC"
+        ).fetchall()
+        evaluation_row = connection.execute(
+            "SELECT metrics_json FROM evaluations "
+            "WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+
+    runs_by_project: dict[str, list[sqlite3.Row]] = {}
+    for run in run_rows:
+        runs_by_project.setdefault(run["project_id"], []).append(run)
+
+    projects = []
+    for project in project_rows:
+        project_runs = runs_by_project.get(project["id"], [])
+        latest_status = project_runs[0]["status"] if project_runs else project["status"]
+        projects.append({
+            "id": project["id"],
+            "name": project["name"],
+            "description": project["description"],
+            "model": project["model_name"],
+            "runCount": len(project_runs),
+            "lastRunStatus": latest_status.title(),
+            "updatedLabel": project["updated_at"],
+        })
+
+    runs = []
+    for run in run_rows:
+        status = run["status"]
+        runs.append({
+            "id": run["id"],
+            "name": run["name"],
+            "project": run["project_name"] or "Unknown project",
+            "projectId": run["project_id"],
+            "model": run["model_name"],
+            "method": run["method"],
+            "status": status.title(),
+            "tone": _status_tone(status),
+            "updated": run["updated_at"],
+            "datasetId": run["dataset_id"],
+        })
+
+    datasets = []
+    for dataset in dataset_rows:
+        size_mb = dataset["size_bytes"] / (1024 * 1024)
+        datasets.append({
+            "id": dataset["id"],
+            "projectId": dataset["project_id"],
+            "name": dataset["name"],
+            "detail": f"{size_mb:.1f} MB · Fingerprint {dataset['fingerprint'][:12]}",
+            "format": dataset["format"],
+            "rows": dataset["row_count"] if dataset["row_count"] is not None else "—",
+            "status": dataset["status"].title(),
+            "role": dataset["role"],
+        })
+
+    evaluation_metrics = json.loads(evaluation_row["metrics_json"] or "[]") if evaluation_row else []
+    return {
+        "projects": projects,
+        "runs": runs,
+        "datasets": datasets,
+        "machine": collect_hardware_profile(),
+        "models": [],
+        "lastEvaluation": evaluation_metrics[0]["formatted"] if evaluation_metrics else "—",
+    }
+
+
+def _status_tone(status: str) -> str:
+    return {
+        "passed": "success",
+        "completed": "success",
+        "warning": "warning",
+        "failed": "danger",
+        "error": "danger",
+        "queued": "neutral",
+        "training": "running",
+        "evaluating": "running",
+    }.get(status.lower(), "neutral")
 
 
 def search_model_catalog(query: str, cursor: str | None) -> dict[str, Any]:
