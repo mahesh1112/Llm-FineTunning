@@ -4,6 +4,7 @@ import json
 import platform
 import shutil
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -221,7 +222,66 @@ def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
 
 def save_project(project: dict[str, Any]) -> dict[str, Any]:
     """Persist a project configuration and return the created project record."""
-    ...
+    name = str(project.get("name", "")).strip()
+    description = str(project.get("description", "")).strip()
+    workflow = str(project.get("workflow", "")).strip()
+    technique = str(project.get("technique", "")).strip()
+    model_id = str(project.get("modelId", "")).strip()
+    model_name = str(project.get("modelName", model_id)).strip()
+    dataset = project.get("dataset")
+    dataset_id = dataset.get("id") if isinstance(dataset, dict) else project.get("datasetId")
+
+    if not name or len(name) > 60:
+        raise ValueError("Project name must contain between 1 and 60 characters.")
+    if workflow not in {
+        "instructional_finetuning",
+        "continued_pretraining",
+        "distillation",
+        "quantization",
+    }:
+        raise ValueError("Unsupported project workflow.")
+    if not model_id or not model_name:
+        raise ValueError("A base model is required.")
+    if workflow != "quantization" and not dataset_id:
+        raise ValueError("A dataset is required for this workflow.")
+
+    project_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+    with connect() as connection:
+        connection.execute(
+            "INSERT INTO projects "
+            "(id, name, description, workflow, technique, model_id, model_name, "
+            "dataset_id, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)",
+            (
+                project_id,
+                name,
+                description,
+                workflow,
+                technique,
+                model_id,
+                model_name,
+                dataset_id,
+                timestamp,
+                timestamp,
+            ),
+        )
+
+    return {
+        "id": project_id,
+        "name": name,
+        "description": description,
+        "workflow": workflow,
+        "technique": technique,
+        "modelId": model_id,
+        "modelName": model_name,
+        "model": model_name,
+        "datasetId": dataset_id,
+        "runCount": 0,
+        "lastRunStatus": "Draft",
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+    }
 
 
 def queue_evaluation(run_id: str, dataset_id: str) -> dict[str, Any]:

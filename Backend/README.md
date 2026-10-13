@@ -4,9 +4,9 @@ This backend currently exposes `GET /api/health`, `GET /api/hardware-profile`, a
 
 ## Planned function templates
 
-`api/operations.py` contains implemented delegates for workspace and hardware profile, plus unrouted HTTP function stubs for model search, run estimates, dataset import, project creation, and evaluation start/status.
+`api/operations.py` contains implemented delegates for workspace, hardware profile, and project creation, plus unrouted HTTP function stubs for model search, run estimates, dataset import, and evaluation start/status.
 
-`services/operations.py` contains implemented hardware discovery and workspace summary services plus business-service stubs for searching the model catalog, resource estimation, dataset validation/storage, project persistence, and evaluation jobs/results.
+`services/operations.py` contains implemented hardware discovery, workspace summary, and project persistence services plus business-service stubs for searching the model catalog, resource estimation, dataset validation/storage, and evaluation jobs/results.
 
 Workspace data is read from the local SQLite database; the remaining operation templates contain descriptions and placeholders and do not create live routes.
 
@@ -26,7 +26,7 @@ uvicorn app:app --app-dir Backend --reload --host 127.0.0.1 --port 8000
 
 Verify in a browser or another terminal at `http://127.0.0.1:8000/api/health`, `http://127.0.0.1:8000/api/hardware-profile`, and `http://127.0.0.1:8000/api/workspace`. The hardware response includes OS, CPU, memory, disk, runtime, and detected GPU information. A `null` or `Unknown` field means it could not be detected; it is not inferred as zero. GPU detection is based on a PyTorch runtime available in the environment.
 
-The frontend uses the hardcoded local API origin `http://127.0.0.1:8000`. Start it separately from the workspace root with `npm --prefix frontend run dev`. The UI health request should show **API connected**. Projects, runs, and datasets are empty until created; model search and other operation routes are not implemented yet.
+The frontend uses the hardcoded local API origin `http://127.0.0.1:8000`. Start it separately from the workspace root with `npm --prefix frontend run dev`. The UI health request should show **API connected**. Projects are stored in the local SQLite database; model search, run execution, dataset import, and evaluation routes are not implemented yet.
 
 The WSGI callable can still be invoked by a future hosting adapter. No cloud provider or deployment configuration is selected here. The Vite and Uvicorn commands are local development servers and must remain running while testing locally.
 

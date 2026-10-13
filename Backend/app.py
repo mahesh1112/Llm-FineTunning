@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.operations import create_project as create_project_operation
 from api.operations import get_hardware_profile, get_workspace
 from services.health import get_health
 
@@ -31,3 +32,8 @@ def hardware_profile() -> dict:
 @app.get("/api/workspace")
 def workspace() -> dict:
     return get_workspace()
+
+
+@app.post("/api/projects", status_code=201)
+def create_project(project: dict) -> dict:
+    return create_project_operation(project)

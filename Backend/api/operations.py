@@ -6,9 +6,12 @@ Implemented endpoints delegate to their matching service functions.
 
 from typing import Any
 
+from fastapi import HTTPException
+
 from services.operations import (
     collect_hardware_profile as collect_hardware_profile_service,
     load_workspace as load_workspace_service,
+    save_project as save_project_service,
 )
 
 
@@ -39,7 +42,10 @@ def import_dataset(file: Any, workflow: str) -> dict[str, Any]:
 
 def create_project(project: dict[str, Any]) -> dict[str, Any]:
     """Create a project record from its selected workflow, model, and dataset."""
-    ...
+    try:
+        return save_project_service(project)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 def start_evaluation(run_id: str, dataset_id: str) -> dict[str, Any]:
