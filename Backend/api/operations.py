@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from services.operations import (
     collect_hardware_profile as collect_hardware_profile_service,
+    estimate_resources as estimate_resources_service,
     load_workspace as load_workspace_service,
     search_model_catalog as search_model_catalog_service,
     save_project as save_project_service,
@@ -38,7 +39,10 @@ def get_hardware_profile() -> dict[str, Any]:
 
 def estimate_run(configuration: dict[str, Any]) -> dict[str, Any]:
     """Estimate runtime and resource requirements for a proposed workflow."""
-    ...
+    try:
+        return estimate_resources_service(configuration)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 def import_dataset(file: Any, workflow: str) -> dict[str, Any]:

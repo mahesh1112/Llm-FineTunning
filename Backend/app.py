@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.operations import create_project as create_project_operation
-from api.operations import get_hardware_profile, get_workspace, search_models
+from api.operations import estimate_run, get_hardware_profile, get_workspace, search_models
 from services.health import get_health
 
 app = FastAPI(title="Local Foundry API", docs_url=None, redoc_url=None)
@@ -37,6 +37,11 @@ def workspace() -> dict:
 @app.get("/api/models")
 def models(query: str = "", cursor: str | None = None, limit: int = Query(default=20, ge=1, le=100)) -> dict:
     return search_models(query, cursor, limit)
+
+
+@app.post("/api/estimates")
+def estimate(configuration: dict = Body(...)) -> dict:
+    return estimate_run(configuration)
 
 
 @app.post("/api/projects", status_code=201)

@@ -325,7 +325,70 @@ def collect_hardware_profile() -> dict[str, Any]:
 
 def estimate_resources(configuration: dict[str, Any]) -> dict[str, Any]:
     """Calculate an estimated duration and resource range for a normalized run."""
-    ...
+    workflow = str(configuration.get("workflow", "")).strip()
+    supported_workflows = {
+        "instructional_finetuning",
+        "continued_pretraining",
+        "distillation",
+        "quantization",
+    }
+    if workflow not in supported_workflows:
+        raise ValueError("Unsupported workflow for resource estimation.")
+
+    hardware = collect_hardware_profile()
+    missing_inputs: list[str] = []
+    assumptions: list[str] = []
+
+    if workflow == "quantization":
+        workload_size = configuration.get("estimatedModelSizeBytes")
+        measured_rate = configuration.get("measuredBytesPerSecond")
+        rate_name = "measuredBytesPerSecond"
+        if not isinstance(workload_size, int) or workload_size <= 0:
+            missing_inputs.append("estimatedModelSizeBytes")
+        else:
+            assumptions.append("Quantization time is based on model file size and a measured local processing rate.")
+    else:
+        workload_size = configuration.get("estimatedTokens")
+        dataset_size = configuration.get("datasetSizeBytes")
+        if workload_size is None and isinstance(dataset_size, int) and dataset_size > 0:
+            workload_size = max(1, round(dataset_size / 4))
+            assumptions.append("Token count is estimated as dataset bytes divided by four; tokenize the dataset for a better estimate.")
+        if not isinstance(workload_size, int) or workload_size <= 0:
+            missing_inputs.append("estimatedTokens or datasetSizeBytes")
+
+        epochs = configuration.get("epochs", 1)
+        if not isinstance(epochs, int) or not 1 <= epochs <= 100:
+            raise ValueError("Epochs must be an integer between 1 and 100.")
+        workload_size = workload_size * epochs if isinstance(workload_size, int) else None
+        measured_rate = configuration.get("measuredTokensPerSecond")
+        rate_name = "measuredTokensPerSecond"
+        assumptions.append("The range uses observed throughput for this model, technique, sequence length, and hardware.")
+
+    if not isinstance(measured_rate, (int, float)) or measured_rate <= 0:
+        missing_inputs.append(rate_name)
+
+    if missing_inputs:
+        assumptions.append("No duration is reported until workload size and a measured local throughput are available.")
+        return {
+            "status": "needs_calibration",
+            "minSeconds": None,
+            "maxSeconds": None,
+            "confidence": "unknown",
+            "hardware": hardware,
+            "assumptions": assumptions,
+            "missingInputs": missing_inputs,
+        }
+
+    processing_seconds = workload_size / measured_rate
+    return {
+        "status": "estimated",
+        "minSeconds": max(1, round(processing_seconds * 0.8 + 60)),
+        "maxSeconds": max(1, round(processing_seconds * 1.5 + 180)),
+        "confidence": "low",
+        "hardware": hardware,
+        "assumptions": assumptions + ["The range adds setup and finalization overhead; runtime may vary."],
+        "missingInputs": [],
+    }
 
 
 def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
