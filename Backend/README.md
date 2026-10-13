@@ -14,7 +14,7 @@
 | `POST` | `/api/evaluations` | Validate a completed run and held-out dataset. Since no evaluation worker exists, records a clear failed status and generates no fake metrics. |
 | `GET` | `/api/evaluations/{id}` | Read a stored evaluation result/status. |
 
-Unimplemented service templates remain in `api/operations.py` and `services/operations.py`. Training runs are not launched by this API yet.
+Training-run execution is not implemented; this API does not launch the existing training scripts.
 
 ## Run locally
 
