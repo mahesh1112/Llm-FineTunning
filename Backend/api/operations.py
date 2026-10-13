@@ -13,6 +13,8 @@ from services.operations import (
     validate_and_store_dataset as import_dataset_service,
     estimate_resources as estimate_resources_service,
     load_workspace as load_workspace_service,
+    queue_evaluation as queue_evaluation_service,
+    read_evaluation as read_evaluation_service,
     search_model_catalog as search_model_catalog_service,
     save_project as save_project_service,
 )
@@ -46,10 +48,10 @@ def estimate_run(configuration: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
-def import_dataset(file: Any, workflow: str) -> dict[str, Any]:
+def import_dataset(file: Any, workflow: str, role: str = "training") -> dict[str, Any]:
     """Accept a dataset upload and return its stored identity and metadata."""
     try:
-        return import_dataset_service(file, workflow)
+        return import_dataset_service(file, workflow, role)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -64,9 +66,17 @@ def create_project(project: dict[str, Any]) -> dict[str, Any]:
 
 def start_evaluation(run_id: str, dataset_id: str) -> dict[str, Any]:
     """Queue evaluation of a completed run against a held-out dataset."""
-    ...
+    try:
+        return queue_evaluation_service(run_id, dataset_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 def get_evaluation(evaluation_id: str) -> dict[str, Any]:
     """Return evaluation job status and metrics when the job has completed."""
-    ...
+    try:
+        return read_evaluation_service(evaluation_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error

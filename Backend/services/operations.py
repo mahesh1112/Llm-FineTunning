@@ -400,11 +400,13 @@ def estimate_resources(configuration: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
+def validate_and_store_dataset(file: Any, workflow: str, role: str = "training") -> dict[str, Any]:
     """Validate an uploaded dataset, store it, and return its fingerprint and metadata."""
     allowed_extensions = DATASET_WORKFLOWS.get(workflow)
     if allowed_extensions is None:
         raise ValueError("Dataset upload is not supported for this workflow.")
+    if role not in {"training", "evaluation", "validation", "test"}:
+        raise ValueError("Dataset role must be training, evaluation, validation, or test.")
 
     original_name = str(getattr(file, "filename", None) or "dataset")
     safe_name = Path(original_name.replace("\\", "/")).name or "dataset"
@@ -451,7 +453,7 @@ def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
                 "INSERT INTO datasets "
                 "(id, project_id, name, workflow, format, size_bytes, row_count, "
                 "fingerprint, storage_path, role, status, created_at) "
-                "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'training', 'validated', ?)",
+                "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'validated', ?)",
                 (
                     dataset_id,
                     safe_name,
@@ -461,6 +463,7 @@ def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
                     row_count,
                     fingerprint,
                     str(destination_path),
+                    role,
                     created_at,
                 ),
             )
@@ -478,7 +481,7 @@ def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
         "rows": row_count,
         "fingerprint": fingerprint,
         "status": "Validated",
-        "role": "training",
+        "role": role,
         "createdAt": created_at,
     }
 
@@ -611,9 +614,82 @@ def save_project(project: dict[str, Any]) -> dict[str, Any]:
 
 def queue_evaluation(run_id: str, dataset_id: str) -> dict[str, Any]:
     """Create an evaluation job for a trained model and a held-out dataset."""
-    ...
+    with connect() as connection:
+        run = connection.execute(
+            "SELECT * FROM runs WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+        dataset = connection.execute(
+            "SELECT * FROM datasets WHERE id = ?",
+            (dataset_id,),
+        ).fetchone()
+
+    if run is None:
+        raise LookupError("Training run was not found.")
+    if dataset is None:
+        raise LookupError("Evaluation dataset was not found.")
+    if run["status"].lower() not in {"passed", "completed", "warning"}:
+        raise ValueError("Only completed training runs can be evaluated.")
+    if dataset["status"].lower() != "validated":
+        raise ValueError("Evaluation dataset must be validated first.")
+    if dataset_id == run["dataset_id"]:
+        raise ValueError("Choose a held-out dataset that was not used for training.")
+    if dataset["role"].lower() not in {"evaluation", "validation", "test", "held-out", "held_out"}:
+        raise ValueError("Dataset must be marked as an evaluation, validation, or test split.")
+    if dataset["project_id"] and run["project_id"] != dataset["project_id"]:
+        raise ValueError("Evaluation dataset must belong to the same project as the run.")
+
+    evaluation_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+    message = "Evaluation worker is not configured. No model metrics were generated."
+    with connect() as connection:
+        connection.execute(
+            "INSERT INTO evaluations "
+            "(id, run_id, dataset_id, status, samples_evaluated, metrics_json, "
+            "error_message, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'failed', NULL, NULL, ?, ?, ?)",
+            (evaluation_id, run_id, dataset_id, message, timestamp, timestamp),
+        )
+
+    return {
+        "id": evaluation_id,
+        "status": "failed",
+        "runId": run_id,
+        "datasetId": dataset_id,
+        "modelName": run["model_name"],
+        "datasetName": dataset["name"],
+        "samplesEvaluated": None,
+        "metrics": [],
+        "message": message,
+        "createdAt": timestamp,
+    }
 
 
 def read_evaluation(evaluation_id: str) -> dict[str, Any]:
     """Load the current evaluation job status and any available metric results."""
-    ...
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT evaluations.*, runs.model_name, datasets.name AS dataset_name "
+            "FROM evaluations "
+            "JOIN runs ON runs.id = evaluations.run_id "
+            "JOIN datasets ON datasets.id = evaluations.dataset_id "
+            "WHERE evaluations.id = ?",
+            (evaluation_id,),
+        ).fetchone()
+
+    if row is None:
+        raise LookupError("Evaluation was not found.")
+
+    return {
+        "id": row["id"],
+        "status": row["status"],
+        "runId": row["run_id"],
+        "datasetId": row["dataset_id"],
+        "modelName": row["model_name"],
+        "datasetName": row["dataset_name"],
+        "samplesEvaluated": row["samples_evaluated"],
+        "metrics": json.loads(row["metrics_json"] or "[]"),
+        "message": row["error_message"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }

@@ -4,10 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.operations import create_project as create_project_operation
 from api.operations import (
     estimate_run,
+    get_evaluation,
     get_hardware_profile,
     get_workspace,
     import_dataset as import_dataset_operation,
     search_models,
+    start_evaluation,
 )
 from services.health import get_health
 
@@ -51,10 +53,24 @@ def estimate(configuration: dict = Body(...)) -> dict:
 
 
 @app.post("/api/datasets/import", status_code=201)
-def import_dataset(file: UploadFile = File(...), workflow: str = Form(...)) -> dict:
-    return import_dataset_operation(file, workflow)
+def import_dataset(
+    file: UploadFile = File(...),
+    workflow: str = Form(...),
+    role: str = Form(default="training"),
+) -> dict:
+    return import_dataset_operation(file, workflow, role)
 
 
 @app.post("/api/projects", status_code=201)
 def create_project(project: dict) -> dict:
     return create_project_operation(project)
+
+
+@app.post("/api/evaluations", status_code=201)
+def start_evaluation_route(payload: dict = Body(...)) -> dict:
+    return start_evaluation(str(payload.get("runId", "")), str(payload.get("datasetId", "")))
+
+
+@app.get("/api/evaluations/{evaluation_id}")
+def get_evaluation_route(evaluation_id: str) -> dict:
+    return get_evaluation(evaluation_id)

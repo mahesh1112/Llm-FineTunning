@@ -42,6 +42,18 @@ class DatasetImportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "accepts"):
             validate_and_store_dataset(upload, "instructional_finetuning")
 
+    def test_evaluation_role_is_persisted_when_requested(self) -> None:
+        content = json.dumps({"instruction": "Say hello", "output": "Hello"}).encode()
+        upload = SimpleNamespace(filename="heldout.jsonl", file=io.BytesIO(content))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            with patch.dict(os.environ, {
+                "LOCAL_FOUNDRY_DB_PATH": os.path.join(temp_directory, "workspace.sqlite3"),
+                "LOCAL_FOUNDRY_DATASET_DIR": os.path.join(temp_directory, "datasets"),
+            }):
+                result = validate_and_store_dataset(upload, "instructional_finetuning", "evaluation")
+
+        self.assertEqual(result["role"], "evaluation")
+
     def test_upload_size_limit_is_enforced(self) -> None:
         upload = SimpleNamespace(filename="training.txt", file=io.BytesIO(b"12345"))
         with tempfile.TemporaryDirectory() as temp_directory:
