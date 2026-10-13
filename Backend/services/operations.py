@@ -1,8 +1,10 @@
 """Business services and templates used by the API endpoint implementations."""
 
 import base64
+import hashlib
 import binascii
 import json
+import os
 import platform
 import re
 import shutil
@@ -17,6 +19,13 @@ from typing import Any
 
 import psutil
 from services.storage import connect
+
+MAX_DATASET_BYTES = 100 * 1024 * 1024
+DATASET_WORKFLOWS = {
+    "instructional_finetuning": {".jsonl"},
+    "continued_pretraining": {".txt", ".text", ".jsonl"},
+    "distillation": {".jsonl"},
+}
 
 
 def load_workspace() -> dict[str, Any]:
@@ -393,7 +402,147 @@ def estimate_resources(configuration: dict[str, Any]) -> dict[str, Any]:
 
 def validate_and_store_dataset(file: Any, workflow: str) -> dict[str, Any]:
     """Validate an uploaded dataset, store it, and return its fingerprint and metadata."""
-    ...
+    allowed_extensions = DATASET_WORKFLOWS.get(workflow)
+    if allowed_extensions is None:
+        raise ValueError("Dataset upload is not supported for this workflow.")
+
+    original_name = str(getattr(file, "filename", None) or "dataset")
+    safe_name = Path(original_name.replace("\\", "/")).name or "dataset"
+    extension = Path(safe_name).suffix.lower()
+    if extension not in allowed_extensions:
+        allowed = ", ".join(sorted(allowed_extensions))
+        raise ValueError(f"This workflow accepts: {allowed}.")
+
+    source = getattr(file, "file", file)
+    if hasattr(source, "seek"):
+        source.seek(0)
+
+    dataset_id = str(uuid.uuid4())
+    dataset_root = Path(os.environ.get(
+        "LOCAL_FOUNDRY_DATASET_DIR",
+        Path(__file__).resolve().parents[1] / "data" / "datasets",
+    ))
+    dataset_root.mkdir(parents=True, exist_ok=True)
+    destination_path = dataset_root / f"{dataset_id}{extension}"
+    temporary_path = dataset_root / f"{dataset_id}.uploading"
+    digest = hashlib.sha256()
+    size_bytes = 0
+
+    try:
+        with temporary_path.open("wb") as destination:
+            while chunk := source.read(1024 * 1024):
+                size_bytes += len(chunk)
+                if size_bytes > MAX_DATASET_BYTES:
+                    raise ValueError(f"Dataset exceeds the {MAX_DATASET_BYTES // (1024 * 1024)} MB upload limit.")
+                digest.update(chunk)
+                destination.write(chunk)
+
+        if size_bytes == 0:
+            raise ValueError("Dataset file is empty.")
+
+        row_count = _validate_dataset_content(temporary_path, extension, workflow)
+        fingerprint = digest.hexdigest()
+        os.replace(temporary_path, destination_path)
+        created_at = datetime.now(timezone.utc).isoformat()
+        dataset_format = extension.removeprefix(".").upper()
+
+        with connect() as connection:
+            connection.execute(
+                "INSERT INTO datasets "
+                "(id, project_id, name, workflow, format, size_bytes, row_count, "
+                "fingerprint, storage_path, role, status, created_at) "
+                "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'training', 'validated', ?)",
+                (
+                    dataset_id,
+                    safe_name,
+                    workflow,
+                    dataset_format,
+                    size_bytes,
+                    row_count,
+                    fingerprint,
+                    str(destination_path),
+                    created_at,
+                ),
+            )
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        destination_path.unlink(missing_ok=True)
+        raise
+
+    return {
+        "id": dataset_id,
+        "name": safe_name,
+        "workflow": workflow,
+        "format": dataset_format,
+        "sizeBytes": size_bytes,
+        "rows": row_count,
+        "fingerprint": fingerprint,
+        "status": "Validated",
+        "role": "training",
+        "createdAt": created_at,
+    }
+
+
+def _validate_dataset_content(path: Path, extension: str, workflow: str) -> int:
+    if extension in {".txt", ".text"}:
+        try:
+            with path.open("r", encoding="utf-8") as dataset_file:
+                rows = sum(1 for line in dataset_file if line.strip())
+        except UnicodeDecodeError as error:
+            raise ValueError("Dataset must use UTF-8 encoding.") from error
+        if rows == 0:
+            raise ValueError("Text dataset contains no non-empty lines.")
+        return rows
+
+    row_count = 0
+    try:
+        with path.open("r", encoding="utf-8-sig") as dataset_file:
+            for line_number, line in enumerate(dataset_file, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise ValueError(f"Invalid JSON on line {line_number}.") from error
+                _validate_dataset_record(record, workflow, line_number)
+                row_count += 1
+    except UnicodeDecodeError as error:
+        raise ValueError("Dataset must use UTF-8 encoding.") from error
+
+    if row_count == 0:
+        raise ValueError("JSONL dataset contains no records.")
+    return row_count
+
+
+def _validate_dataset_record(record: Any, workflow: str, line_number: int) -> None:
+    if not isinstance(record, dict):
+        raise ValueError(f"JSONL line {line_number} must contain a JSON object.")
+
+    if workflow == "instructional_finetuning":
+        messages = record.get("messages")
+        is_messages_record = (
+            isinstance(messages, list)
+            and bool(messages)
+            and all(
+                isinstance(message, dict)
+                and isinstance(message.get("role"), str)
+                and isinstance(message.get("content"), str)
+                for message in messages
+            )
+        )
+        is_instruction_record = (
+            isinstance(record.get("instruction"), str)
+            and isinstance(record.get("output"), str)
+            and bool(record["output"].strip())
+        )
+        if not (is_messages_record or is_instruction_record):
+            raise ValueError(f"JSONL line {line_number} needs instruction/output or a messages array.")
+    elif workflow == "distillation":
+        if not isinstance(record.get("prompt"), str) or not isinstance(record.get("teacher_response"), str):
+            raise ValueError(f"JSONL line {line_number} needs prompt and teacher_response strings.")
+    elif workflow == "continued_pretraining":
+        if not isinstance(record.get("text"), str) or not record["text"].strip():
+            raise ValueError(f"JSONL line {line_number} needs a non-empty text field.")
 
 
 def save_project(project: dict[str, Any]) -> dict[str, Any]:

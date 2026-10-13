@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from services.operations import (
     collect_hardware_profile as collect_hardware_profile_service,
+    validate_and_store_dataset as import_dataset_service,
     estimate_resources as estimate_resources_service,
     load_workspace as load_workspace_service,
     search_model_catalog as search_model_catalog_service,
@@ -47,7 +48,10 @@ def estimate_run(configuration: dict[str, Any]) -> dict[str, Any]:
 
 def import_dataset(file: Any, workflow: str) -> dict[str, Any]:
     """Accept a dataset upload and return its stored identity and metadata."""
-    ...
+    try:
+        return import_dataset_service(file, workflow)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 def create_project(project: dict[str, Any]) -> dict[str, Any]:

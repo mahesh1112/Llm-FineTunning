@@ -1,8 +1,14 @@
-from fastapi import Body, FastAPI, Query
+from fastapi import Body, FastAPI, File, Form, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.operations import create_project as create_project_operation
-from api.operations import estimate_run, get_hardware_profile, get_workspace, search_models
+from api.operations import (
+    estimate_run,
+    get_hardware_profile,
+    get_workspace,
+    import_dataset as import_dataset_operation,
+    search_models,
+)
 from services.health import get_health
 
 app = FastAPI(title="Local Foundry API", docs_url=None, redoc_url=None)
@@ -42,6 +48,11 @@ def models(query: str = "", cursor: str | None = None, limit: int = Query(defaul
 @app.post("/api/estimates")
 def estimate(configuration: dict = Body(...)) -> dict:
     return estimate_run(configuration)
+
+
+@app.post("/api/datasets/import", status_code=201)
+def import_dataset(file: UploadFile = File(...), workflow: str = Form(...)) -> dict:
+    return import_dataset_operation(file, workflow)
 
 
 @app.post("/api/projects", status_code=201)
