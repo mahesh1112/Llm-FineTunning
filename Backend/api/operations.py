@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from services.operations import (
     collect_hardware_profile as collect_hardware_profile_service,
     load_workspace as load_workspace_service,
+    search_model_catalog as search_model_catalog_service,
     save_project as save_project_service,
 )
 
@@ -20,9 +21,14 @@ def get_workspace() -> dict[str, Any]:
     return load_workspace_service()
 
 
-def search_models(query: str = "", cursor: str | None = None) -> dict[str, Any]:
+def search_models(query: str = "", cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
     """Search the supported Hugging Face model catalog and return a result page."""
-    ...
+    try:
+        return search_model_catalog_service(query, cursor, limit)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
 
 
 def get_hardware_profile() -> dict[str, Any]:

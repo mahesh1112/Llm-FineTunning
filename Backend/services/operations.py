@@ -1,9 +1,15 @@
 """Business services and templates used by the API endpoint implementations."""
 
+import base64
+import binascii
 import json
 import platform
+import re
 import shutil
 import sqlite3
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -104,9 +110,116 @@ def _status_tone(status: str) -> str:
     }.get(status.lower(), "neutral")
 
 
-def search_model_catalog(query: str, cursor: str | None) -> dict[str, Any]:
+def search_model_catalog(query: str, cursor: str | None, limit: int = 20) -> dict[str, Any]:
     """Find supported Hugging Face models matching a query and pagination cursor."""
-    ...
+    if not 1 <= limit <= 100:
+        raise ValueError("Model search limit must be between 1 and 100.")
+    if cursor:
+        request_url = _decode_model_cursor(cursor)
+    else:
+        parameters = urllib.parse.urlencode({
+            "search": query.strip(),
+            "limit": limit,
+            "sort": "downloads",
+            "direction": "-1",
+        })
+        request_url = f"https://huggingface.co/api/models?{parameters}"
+
+    request = urllib.request.Request(
+        request_url,
+        headers={"Accept": "application/json", "User-Agent": "LocalFoundry/0.1"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            records = json.loads(response.read().decode("utf-8"))
+            next_cursor = _encode_next_link(response.headers.get("Link"))
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"Hugging Face returned HTTP {error.code} for model search.") from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise RuntimeError("Could not reach the Hugging Face model catalog.") from error
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Hugging Face returned an invalid model catalog response.") from error
+
+    if not isinstance(records, list):
+        raise RuntimeError("Hugging Face returned an unexpected model catalog response.")
+
+    return {
+        "items": [_format_model_record(record) for record in records if isinstance(record, dict)],
+        "nextCursor": next_cursor,
+        "source": "huggingface",
+    }
+
+
+def _format_model_record(record: dict[str, Any]) -> dict[str, Any]:
+    model_id = record.get("modelId") or record.get("id")
+    card_data = record.get("cardData") or {}
+    config = record.get("config") or {}
+    safe_tensor_data = record.get("safetensors") or {}
+    parameter_counts = safe_tensor_data.get("parameters") or {}
+    parameter_count = max(
+        (count for count in parameter_counts.values() if isinstance(count, int)),
+        default=None,
+    ) if isinstance(parameter_counts, dict) else None
+    tags = record.get("tags") or []
+    license_name = card_data.get("license")
+    if not license_name:
+        license_name = next((tag.removeprefix("license:") for tag in tags if tag.startswith("license:")), None)
+
+    return {
+        "id": model_id,
+        "name": model_id,
+        "parameters": _format_parameter_count(parameter_count),
+        "family": record.get("pipeline_tag") or "Hugging Face model",
+        "description": card_data.get("description") or "",
+        "license": license_name or "Unknown",
+        "context": config.get("max_position_embeddings") or "Unknown",
+        "download": "Unknown",
+        "downloads": record.get("downloads"),
+        "likes": record.get("likes"),
+        "methods": "",
+        "capability": "Catalog result",
+        "tone": "neutral",
+    }
+
+
+def _format_parameter_count(value: int | None) -> str:
+    if value is None:
+        return "Unknown"
+    if value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.1f}B"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}K"
+    return str(value)
+
+
+def _encode_next_link(link_header: str | None) -> str | None:
+    if not link_header:
+        return None
+    for link in link_header.split(","):
+        match = re.search(r"<([^>]+)>\s*;\s*rel=\"?next\"?", link)
+        if match:
+            target = match.group(1)
+            _validate_model_catalog_url(target)
+            return base64.urlsafe_b64encode(target.encode("utf-8")).decode("ascii").rstrip("=")
+    return None
+
+
+def _decode_model_cursor(cursor: str) -> str:
+    try:
+        padded_cursor = cursor + "=" * (-len(cursor) % 4)
+        target = base64.urlsafe_b64decode(padded_cursor.encode("ascii")).decode("utf-8")
+        _validate_model_catalog_url(target)
+        return target
+    except (ValueError, UnicodeError, binascii.Error) as error:
+        raise ValueError("Invalid model catalog cursor.") from error
+
+
+def _validate_model_catalog_url(target: str) -> None:
+    parsed = urllib.parse.urlsplit(target)
+    if parsed.scheme != "https" or parsed.netloc != "huggingface.co" or parsed.path != "/api/models":
+        raise ValueError("Model catalog pagination cursor is not valid.")
 
 
 def collect_hardware_profile() -> dict[str, Any]:
