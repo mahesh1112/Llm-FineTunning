@@ -1,11 +1,12 @@
-"""HTTP endpoint templates for workspace and model operations.
+"""HTTP endpoint functions and templates for workspace and model operations.
 
-These functions are intentionally not registered in ``app.py`` yet. Each
-endpoint will validate its HTTP input and delegate to the matching service
-when that operation is implemented.
+Unimplemented functions are intentionally not registered in ``app.py`` yet.
+Implemented endpoints delegate to their matching service functions.
 """
 
 from typing import Any
+
+from services.operations import collect_hardware_profile as collect_hardware_profile_service
 
 
 def get_workspace() -> dict[str, Any]:
@@ -20,7 +21,7 @@ def search_models(query: str = "", cursor: str | None = None) -> dict[str, Any]:
 
 def get_hardware_profile() -> dict[str, Any]:
     """Return the execution worker's detected hardware and runtime capabilities."""
-    ...
+    return collect_hardware_profile_service()
 
 
 def estimate_run(configuration: dict[str, Any]) -> dict[str, Any]:
