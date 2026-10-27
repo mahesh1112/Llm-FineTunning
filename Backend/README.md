@@ -1,41 +1,51 @@
 # Python API
 
-This backend currently exposes one endpoint: `GET /api/health`. The response logic is isolated in `services/health.py`. `api/health.py` keeps a provider-neutral WSGI callable; `app.py` is a small ASGI adapter for local Uvicorn development.
+## Implemented routes
 
-## Planned function templates
+| Method | Route | Behavior |
+|---|---|---|
+| `GET` | `/api/health` | Return service health. |
+| `GET` | `/api/hardware-profile` | Report host CPU, RAM, disk, Python/PyTorch, and visible accelerator details. Unknown hardware remains unknown. |
+| `GET` | `/api/workspace` | Read project, run, dataset, evaluation, and hardware summaries from local SQLite. |
+| `GET` | `/api/models?query=&limit=20&cursor=` | Search the public Hugging Face model catalog with validated pagination cursors. |
+| `POST` | `/api/estimates` | Return a duration range when workload size and measured throughput are supplied; otherwise return missing calibration inputs. |
+| `POST` | `/api/datasets/import` | Stream, validate, hash, and store supported JSONL/text datasets. The optional `role` form field can mark held-out data. |
+| `POST` | `/api/projects` | Validate and persist a project in SQLite. |
+| `POST` | `/api/evaluations` | Validate a completed run and held-out dataset. Since no evaluation worker exists, records a clear failed status and generates no fake metrics. |
+| `GET` | `/api/evaluations/{id}` | Read a stored evaluation result/status. |
 
-`api/operations.py` contains unrouted HTTP function stubs for workspace data, model search, hardware profile, run estimates, dataset import, project creation, and evaluation start/status. Each is intended to validate/request HTTP data and delegate to its service counterpart.
+Training-run execution is not implemented; this API does not launch the existing training scripts.
 
-`services/operations.py` contains the matching business-service stubs for assembling workspace data, searching the model catalog, hardware discovery, resource estimation, dataset validation/storage, project persistence, and evaluation jobs/results.
+## Run locally
 
-These functions contain descriptions and placeholders only. They are not connected to `app.py`, do not execute work, and do not create live API routes. The health endpoint remains the only implemented route.
-
-## Run locally with Uvicorn
-
-From the workspace root, install the local HTTP adapter dependencies:
+Install dependencies from the workspace root:
 
 ```powershell
 python -m pip install -r Backend/requirements.txt
 ```
 
-After installing dependencies, start the backend from the workspace root:
+Start the backend from the workspace root:
 
 ```powershell
 uvicorn app:app --app-dir Backend --reload --host 127.0.0.1 --port 8000
 ```
 
-Verify in a browser or another terminal at `http://127.0.0.1:8000/api/health`. Expected JSON: `{"status":"ok","service":"local-foundry-api"}`.
+Start the frontend in another terminal:
 
-The frontend uses the hardcoded local API origin `http://127.0.0.1:8000`. Start it separately from the workspace root with `npm --prefix frontend run dev`. The UI health request should show **API connected**. The workspace and other routes are not implemented and remain preview/unavailable as appropriate.
+```powershell
+npm --prefix frontend run dev
+```
 
-The WSGI callable can still be invoked by a future hosting adapter. No cloud provider or deployment configuration is selected here. The Vite and Uvicorn commands are local development servers and must remain running while testing locally.
+The frontend calls `http://127.0.0.1:8000`. Project and dataset records are stored under `Backend/data/` unless `LOCAL_FOUNDRY_DB_PATH` or `LOCAL_FOUNDRY_DATASET_DIR` is set.
 
-Run the provider-neutral WSGI function tests from this `Backend/` directory:
+## Tests
+
+Run the backend suite from `Backend/`:
 
 ```powershell
 python -B -m unittest discover -s tests -v
 ```
 
-## Current execution limits
+## Execution limitations
 
-This endpoint is stateless and short-lived. Existing training scripts are not connected to it. Model training is long-running and writes checkpoints/artifacts, so a serverless request should not run training inline. That feature will need a durable job/worker and persistent artifact storage, designed separately from this health endpoint.
+This is local SQLite and filesystem storage. Those are persistent for local Uvicorn use but may be ephemeral in a serverless runtime; a durable database/object-storage adapter is required before deployment there. Model training and evaluation are long-running and require a separate worker; the API does not run those jobs inline. No cloud provider has been selected or deployed.
